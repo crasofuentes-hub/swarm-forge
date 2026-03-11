@@ -1,0 +1,23 @@
+# Recommended focused-search command for a single GPU
+python -m swarm_forge `
+  --use-ray `
+  --focused-search `
+  --reduced-roles-mode `
+  --device cuda `
+  --amp `
+  --dtype bfloat16 `
+  --compile-model `
+  --batch-size 32 `
+  --block-size 256 `
+  --n-layer 6 `
+  --n-head 6 `
+  --n-embd 384 `
+  --learning-rate 3e-4 `
+  --dropout 0.2 `
+  --eval-iters 20 `
+  --max-iters-per-cycle 300 `
+  --patch-trial-train-steps 40 `
+  --max-cycles 8 `
+  --cycle-seconds 900 `
+  --output-dir runs\gpu_focused_search `
+  --data-dir data\tinyshakespeare

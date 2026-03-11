@@ -101,6 +101,9 @@ class TrainingConfig:
     torch_compile_backend: str = "inductor"
     gradient_accumulation_steps: int = 1
     checkpoint_keep_last: int = 3
+    objective_metric: str = "val_loss"
+    focused_search: bool = True
+    patch_trial_train_steps: int = 40
 
 
 @dataclass
@@ -139,6 +142,7 @@ class SwarmConfig:
     dead_after_failures: int = 3
     max_patch_eval_candidates: Optional[int] = None
     quiet_sleep: float = 1.0
+    reduced_roles_mode: bool = True
 
     def validate(self) -> None:
         if self.agents_per_role != 10:
@@ -1202,26 +1206,26 @@ class EvaluatorAgent(Agent):
         perplexity = float(runtime_metrics.get("perplexity", 999.0))
         throughput = float(runtime_metrics.get("throughput_tokens_per_sec", 0.0))
         bleu_like = float(runtime_metrics.get("bleu_like", 0.0))
-        base = 50.0
+        base = 35.0
         if patch.patch_type in {"hyperparam", "loss", "memory", "speed"}:
-            base += 8.0
+            base += 12.0
         if patch.patch_type == "model_arch":
-            base += 4.0
-        if patch.patch_type == "sabotage":
-            base -= 12.0
-        quality_bonus = max(0.0, 20.0 - val_loss * 5.0)
-        ppl_bonus = max(0.0, 15.0 - math.log(max(1.0, perplexity)) * 4.0)
-        throughput_bonus = min(8.0, throughput / 10000.0)
-        bleu_bonus = min(7.0, bleu_like / 20.0)
-        score = base + quality_bonus + ppl_bonus + throughput_bonus + bleu_bonus + self.local_rng.uniform(-2.0, 2.0)
-        approve = score >= 70.0
+            base += 10.0
+        if patch.patch_type in {"sabotage", "resilience"}:
+            base -= 25.0
+        val_loss_bonus = max(0.0, 45.0 - val_loss * 12.0)
+        ppl_bonus = max(0.0, 8.0 - math.log(max(1.0, perplexity)) * 2.0)
+        throughput_bonus = min(4.0, throughput / 20000.0)
+        bleu_bonus = min(3.0, bleu_like / 50.0)
+        score = base + val_loss_bonus + ppl_bonus + throughput_bonus + bleu_bonus + self.local_rng.uniform(-1.0, 1.0)
+        approve = score >= 72.0 and patch.patch_type not in {"sabotage", "resilience"}
         return PatchVote(
             patch_id=patch.id,
             voter_id=self.agent_id,
             voter_role=self.role,
             approve=approve,
             score=max(0.0, min(100.0, score)),
-            reason="Metric-driven evaluator vote.",
+            reason="Val-loss-dominant evaluator vote.",
         )
 
 
@@ -1547,6 +1551,10 @@ class SwarmEngine:
     def _agent_vote_weight(self, role: str) -> float:
         if role == "Evaluator":
             return self.swarm_cfg.evaluator_weight_total / 10.0
+        if getattr(self.swarm_cfg, "reduced_roles_mode", False):
+            low_signal_roles = {"Saboteur", "ResilienceChecker", "TokenizerOptimizer", "DataAugmentor"}
+            if role in low_signal_roles:
+                return 0.10
         return self.swarm_cfg.others_weight_total / 110.0
 
     def _collect_votes(self, patches: List[Patch], runtime_metrics: Dict[str, Any]) -> Dict[str, List[PatchVote]]:
@@ -1715,6 +1723,7 @@ class SwarmEngine:
         self.logger.info("Cycle %04d started.", cycle_index)
 
         baseline_metrics = self.runtime.evaluate()
+        baseline_val_loss = float(baseline_metrics.get("val_loss", float("inf")))
         patches = self._collect_patches(cycle_index=cycle_index)
         if self.swarm_cfg.max_patch_eval_candidates is not None:
             patches = patches[: self.swarm_cfg.max_patch_eval_candidates]
@@ -1730,6 +1739,9 @@ class SwarmEngine:
         metrics["applied_patch_count"] = sum(1 for r in applied_records if r.success)
         metrics["rejected_patch_count"] = sum(1 for d in decisions if not d.applied)
         metrics["alive_by_role"] = count_alive_by_role(list(self.agent_states.values()))
+        metrics["baseline_val_loss"] = baseline_val_loss
+        metrics["val_loss_delta"] = float(metrics["val_loss"] - baseline_val_loss)
+        metrics["val_loss_improved"] = bool(metrics["val_loss"] < baseline_val_loss)
 
         ckpt_path = self._post_train_checkpoint(cycle_index, metrics)
         elapsed = time.perf_counter() - cycle_start
@@ -1764,10 +1776,11 @@ class SwarmEngine:
 
         winner_summaries = [d for d in decisions if d.applied]
         self.logger.info(
-            "Cycle %04d summary | train_loss=%s val_loss=%s ppl=%s bleu=%s tok/s=%s alive=%d winners=%d",
+            "Cycle %04d summary | train_loss=%s val_loss=%s delta=%s ppl=%s bleu=%s tok/s=%s alive=%d winners=%d",
             cycle_index,
             human_float(metrics["train_loss"]),
             human_float(metrics["val_loss"]),
+            human_float(metrics["val_loss_delta"]),
             human_float(metrics["perplexity"]),
             human_float(metrics["bleu_like"]),
             human_float(metrics["throughput_tokens_per_sec"]),
@@ -1841,6 +1854,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pin-memory", action="store_true", default=False)
     parser.add_argument("--approval-threshold", type=float, default=60.0)
     parser.add_argument("--score-threshold", type=float, default=70.0)
+    parser.add_argument("--focused-search", action="store_true", default=False)
+    parser.add_argument("--patch-trial-train-steps", type=int, default=40)
+    parser.add_argument("--reduced-roles-mode", action="store_true", default=False)
+    parser.add_argument("--baseline-only", action="store_true", default=False)
     return parser
 
 
@@ -1861,6 +1878,8 @@ def main() -> None:
         amp_enabled=args.amp,
         num_workers=args.num_workers,
         pin_memory=args.pin_memory,
+        focused_search=args.focused_search,
+        patch_trial_train_steps=args.patch_trial_train_steps,
     )
     model_cfg = ModelConfig(
         vocab_size=256,
@@ -1879,9 +1898,14 @@ def main() -> None:
         use_ray=args.use_ray,
         patch_apply_approval_threshold=args.approval_threshold,
         patch_apply_score_threshold=args.score_threshold,
+        reduced_roles_mode=args.reduced_roles_mode,
     )
     engine = SwarmEngine(train_cfg=train_cfg, model_cfg=model_cfg, swarm_cfg=swarm_cfg)
-    engine.run()
+    if args.baseline_only:
+        metrics = engine.runtime.evaluate()
+        print(json.dumps({"mode": "baseline_only", "metrics": metrics}, sort_keys=True))
+    else:
+        engine.run()
 
 
 if __name__ == "__main__":
