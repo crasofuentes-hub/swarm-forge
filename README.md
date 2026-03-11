@@ -1,4 +1,4 @@
-﻿# Swarm Forge v1.0
+# Swarm Forge v1.0
 
 **Swarm Forge** is a competitive engineering system for disciplined experimentation on a nanoGPT-style language model using TinyShakespeare as a bounded testbed.
 
@@ -6,7 +6,7 @@ It is built around a simple premise:
 
 > before scaling capability, harden correctness, observability, rollback safety, and decision discipline.
 
-This repository is not a theatrical “autonomous AI swarm.”
+This repository is not a theatrical "autonomous AI swarm."
 It is an attempt to impose engineering constraints on multi-agent model iteration.
 
 ---
@@ -54,7 +54,7 @@ Swarm Forge is **not**:
 - a production LLM training stack,
 - a replacement for rigorous ML research methodology,
 - a guarantee of reaching arbitrary target losses,
-- a proof that “more agents” automatically implies better optimization,
+- a proof that "more agents" automatically implies better optimization,
 - a fully secure distributed system,
 - a benchmark winner.
 
@@ -261,7 +261,7 @@ They are the next engineering obligations.
 
 The roadmap is intentionally ordered by **integrity**, not by hype.
 
-### Phase 1 — Contract Hardening
+### Phase 1 - Contract Hardening
 Priority: highest
 
 - Split the single-file implementation into a real package layout.
@@ -273,7 +273,7 @@ Priority: highest
 - Add compatibility checks for architecture mutations.
 - Add test coverage for arbitration, thresholds, conflicts, and lifecycle transitions.
 
-### Phase 2 — Auditability and Reproducibility
+### Phase 2 - Auditability and Reproducibility
 Priority: very high
 
 - Add signed manifests and stronger provenance chains.
@@ -283,7 +283,7 @@ Priority: very high
 - Add checkpoint lineage metadata.
 - Add stronger metric provenance and comparison baselines.
 
-### Phase 3 — Execution Robustness
+### Phase 3 - Execution Robustness
 Priority: high
 
 - Improve Ray runtime supervision.
@@ -294,7 +294,7 @@ Priority: high
 - Add stronger CPU fallback parity.
 - Add better interruption recovery.
 
-### Phase 4 — Capability Expansion
+### Phase 4 - Capability Expansion
 Priority: secondary
 
 Only after the above is hardened:
@@ -310,7 +310,7 @@ Only after the above is hardened:
 Capabilities are expansion work.
 They are not foundation work.
 
-### Phase 5 — Research Extensions
+### Phase 5 - Research Extensions
 Priority: optional
 
 - multi-objective arbitration,
