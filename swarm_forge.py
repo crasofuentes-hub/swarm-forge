@@ -1635,11 +1635,13 @@ class SwarmEngine:
             elif d.reason == "thresholds_met":
                 d.reason = "rejected_due_to_conflict_or_limit"
 
-        for d in decisions:
-            append_jsonl(self.decisions_path, {
-                "timestamp": utc_now(),
-                **asdict(d),
-            })
+        decisions_path = getattr(self, "decisions_path", None)
+        if decisions_path is not None:
+            for d in decisions:
+                append_jsonl(decisions_path, {
+                    "timestamp": utc_now(),
+                    **asdict(d),
+                })
         return decisions
 
     def _apply_accepted_patches(self, patches: List[Patch], decisions: List[PatchDecision]) -> List[AppliedPatchRecord]:
