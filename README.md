@@ -224,7 +224,7 @@ It would rather be called conservative than incoherent.
 
 This repository currently provides:
 
-- a complete single-file implementation of the Swarm Forge runtime,
+- a package-based implementation of the Swarm Forge runtime,
 - a patchable nanoGPT-style model,
 - TinyShakespeare dataset bootstrap,
 - weighted voting and arbitration logic,
