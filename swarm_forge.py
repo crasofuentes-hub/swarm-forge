@@ -464,7 +464,7 @@ class TrainingRuntime:
         self.global_step = 0
         self.applied_patches: List[AppliedPatchRecord] = []
         self.loss_name: str = "cross_entropy"
-        self.scaler = torch.cuda.amp.GradScaler(enabled=self._use_fp16_scaler())
+        self.scaler = torch.amp.GradScaler("cuda", enabled=self._use_fp16_scaler())
         self.optimizer = self._build_optimizer()
         self.scheduler = self._build_scheduler()
         self._maybe_compile()
@@ -919,7 +919,7 @@ class PatchApplier:
                 tcfg.batch_size = max(4, min(128, int(p["batch_size"])))
             if "micro_batch_size" in p:
                 tcfg.micro_batch_size = max(4, min(tcfg.batch_size, int(p["micro_batch_size"])))
-            self.runtime.scaler = torch.cuda.amp.GradScaler(enabled=self.runtime._use_fp16_scaler())
+            self.runtime.scaler = torch.amp.GradScaler("cuda", enabled=self.runtime._use_fp16_scaler())
             return {"updated": "memory_runtime_flags"}
 
         if patch.patch_type in {"evaluation", "arbitration"}:

@@ -1,5 +1,7 @@
 # Swarm Forge v1.0
 
+[![CI](https://github.com/crasofuentes-hub/swarm-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/crasofuentes-hub/swarm-forge/actions/workflows/ci.yml)
+
 **Swarm Forge** is a competitive engineering system for disciplined experimentation on a nanoGPT-style language model using TinyShakespeare as a bounded testbed.
 
 It is built around a simple premise:
