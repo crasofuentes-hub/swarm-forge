@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+title: "Swarm Forge"
+message: "If you use Swarm Forge in research, please cite this repository."
+type: software
+authors:
+  - family-names: Fuentes Fernández
+    given-names: Oscar
+repository-code: https://github.com/crasofuentes-hub/swarm-forge
+license: MIT
+version: 1.0
+date-released: 2026-03-12
+abstract: >
+  Swarm Forge is a multi-agent autonomous training optimizer
+  that improves nanoGPT-style models through governed patch
+  search, empirical validation, and rollback-safe execution.
+keywords:
+  - multi-agent systems
+  - automl
+  - language models
+  - training optimization
+  - pytorch
