@@ -8,7 +8,7 @@ It improves training through **governed multi-agent patch search**, **empirical 
 
 ## Current Best Measured Result
 
-Swarm Forge has reduced TinyShakespeare validation loss from approximately **4.1736** to **1.8454** under autonomous multi-agent search.
+Swarm Forge has reduced TinyShakespeare validation loss from approximately **4.1736** to **1.6318** under autonomous multi-agent search.
 
 See [RESULTS.md](./RESULTS.md) for the current evidence summary.
 
@@ -111,7 +111,7 @@ Current empirical trajectory:
 
 - baseline: **~4.1736**
 - focused GPU search v2: **1.8794**
-- resumed v3 improvement: **1.8454**
+- resumed v3 improvement: **1.6318**
 
 ---
 
@@ -176,7 +176,7 @@ That is the real idea.
 
 **Version:** v1.0  
 **State:** experimental, test-backed, CI-validated, improving  
-**Current best TinyShakespeare val_loss:** **1.8454**  
+**Current best TinyShakespeare val_loss:** **1.6318**  
 **Near-term target:** **< 1.4 on a single GPU**
 
 ---
