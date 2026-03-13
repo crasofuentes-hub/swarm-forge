@@ -20,6 +20,24 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Literal, Optional, Sequence, Tuple
 
+def trust_region(param_name: str, proposed: float, current: float) -> float:
+    TRUST_REGION = {
+        "learning_rate": 0.20,
+        "dropout": 0.15,
+        "batch_size": 0.25,
+    }
+
+    delta = TRUST_REGION.get(param_name, 0.20)
+    lower = current * (1 - delta)
+    upper = current * (1 + delta)
+    return max(lower, min(proposed, upper))
+
+
+def golden_checkpoint_guard(val_loss: float, best_val_loss: Optional[float]) -> bool:
+    if best_val_loss is None:
+        return False
+    return val_loss > best_val_loss * 1.15
+
 try:
     import torch
     import torch.nn as nn
