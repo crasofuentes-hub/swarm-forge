@@ -2004,6 +2004,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Swarm Forge v1.0")
     parser.add_argument("--output-dir", type=str, default="runs/swarm_forge_v1")
     parser.add_argument("--data-dir", type=str, default="data/tinyshakespeare")
+    parser.add_argument("--dataset-name", type=str, default="tinyshakespeare")
     parser.add_argument("--max-hours", type=float, default=24.0)
     parser.add_argument("--max-cycles", type=int, default=None)
     parser.add_argument("--cycle-seconds", type=int, default=900)
@@ -2068,6 +2069,7 @@ def main() -> None:
         max_cycles=args.max_cycles,
         output_dir=args.output_dir,
         data_dir=args.data_dir,
+        dataset_name=args.dataset_name,
         use_ray=args.use_ray,
         patch_apply_approval_threshold=args.approval_threshold,
         patch_apply_score_threshold=args.score_threshold,
