@@ -147,6 +147,7 @@ class SwarmConfig:
     max_cycles: Optional[int] = None
     output_dir: str = "runs/swarm_forge_v1"
     data_dir: str = "data/tinyshakespeare"
+    dataset_name: str = "tinyshakespeare"
     use_ray: bool = True
     fallback_workers: int = 16
     patch_apply_approval_threshold: float = 60.0
