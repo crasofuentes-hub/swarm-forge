@@ -617,6 +617,65 @@ class TrainingRuntime:
         self._cleanup_old_checkpoints()
         return path
 
+    def load_checkpoint(self, path: str) -> Dict[str, Any]:
+        """
+        Load a previously saved checkpoint and restore model/optimizer/scheduler state.
+        Designed for continuation on the same architecture family.
+        """
+        ckpt_path = Path(path)
+        if not ckpt_path.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+
+        ckpt = torch.load(str(ckpt_path), map_location="cpu")
+
+        # Restore model config and rebuild model on current runtime device.
+        self.mcfg = ModelConfig(**ckpt["model_config"])
+        self.mcfg.block_size = int(self.tcfg.block_size)
+
+        self.model = NanoGPT(self.mcfg).to(self.device)
+        self.model.load_state_dict(ckpt["model_state_dict"], strict=True)
+        self.model.gradient_checkpointing = self.tcfg.use_gradient_checkpointing
+
+        # Restore counters and loss name.
+        self.loss_name = str(ckpt.get("loss_name", "cross_entropy"))
+        self.best_val_loss = float(ckpt.get("best_val_loss", self.best_val_loss))
+        self.global_step = int(ckpt.get("global_step", self.global_step))
+
+        # Restore tokenizer merges if present.
+        merges = ckpt.get("tokenizer_merges", None)
+        if merges is not None:
+            self.dataset.tokenizer.update_merges([(str(a), str(b)) for a, b in merges])
+            self.dataset.rebuild_after_tokenizer_update()
+
+        # Optimizer/scheduler state: best-effort load; if incompatible, continue with fresh state.
+        self.optimizer = self._build_optimizer()
+        try:
+            self.optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+        except Exception:
+            pass
+
+        for pg in self.optimizer.param_groups:
+            pg["lr"] = float(self.tcfg.learning_rate)
+
+        self.logger.info("Effective optimizer lr after resume: %.8f", float(self.optimizer.param_groups[0]["lr"]))
+
+        self.scheduler = self._build_scheduler()
+        if self.scheduler is not None:
+            try:
+                ssd = ckpt.get("scheduler_state_dict", None)
+                if ssd is not None:
+                    self.scheduler.load_state_dict(ssd)
+            except Exception:
+                pass
+
+        self.last_eval_metrics = dict(ckpt.get("last_eval_metrics", {}))
+        return {
+            "checkpoint": str(ckpt_path),
+            "best_val_loss": self.best_val_loss,
+            "global_step": self.global_step,
+            "loss_name": self.loss_name,
+        }
+
     def _cleanup_old_checkpoints(self) -> None:
         files = sorted(self.ckpt_dir.glob("checkpoint_*.pt"), key=lambda p: p.stat().st_mtime, reverse=True)
         for extra in files[self.tcfg.checkpoint_keep_last:]:
@@ -1645,7 +1704,7 @@ class SwarmEngine:
                 existing = best_by_group.get(group)
                 rank = (weighted_score, approval_percent)
                 if existing is None or rank > existing[1]:
-                    best_by_group[group] = (decision, weighted_score * 1000.0 + approval_percent)
+                    best_by_group[group] = (decision, rank)
 
         accepted_ids = [d.patch_id for d, _ in best_by_group.values()]
         accepted_ids = sorted(
@@ -1654,10 +1713,23 @@ class SwarmEngine:
             reverse=True,
         )[: self.swarm_cfg.max_patches_applied_per_cycle]
 
+        patch_type_by_id = {p.id: p.patch_type for p in patches}
+
         for d in decisions:
-            if d.patch_id in accepted_ids:
+            patch_type = patch_type_by_id.get(d.patch_id)
+
+            if (
+                d.patch_id in accepted_ids
+                and not (
+                    patch_type == "model_arch"
+                    and self.runtime.best_val_loss <= 1.70
+                )
+            ):
                 d.applied = True
                 d.reason = "accepted_best_in_conflict_group"
+            elif d.patch_id in accepted_ids and patch_type == "model_arch" and self.runtime.best_val_loss <= 1.70:
+                d.applied = False
+                d.reason = "architecture_frozen_in_finetune"
             elif d.reason == "thresholds_met":
                 d.reason = "rejected_due_to_conflict_or_limit"
 
@@ -1736,7 +1808,80 @@ class SwarmEngine:
                 "best_val_loss": self.runtime.best_val_loss,
             })
 
+    def _guarded_train_cycle(self, total_steps: int, chunk_steps: int = 20, tol_abs: float = 0.002, tol_drift: float = 0.010) -> Dict[str, Any]:
+        import sys
+        print("RUNTIME_MARK: guarded_train_cycle ENTERED :: " + __file__, file=sys.stderr, flush=True)
+
+        baseline_metrics = self.runtime.evaluate()
+        baseline_val = float(baseline_metrics.get("val_loss", float("inf")))
+
+        best_snapshot = self.runtime.snapshot_state()
+        best_metrics = dict(baseline_metrics)
+        best_val = baseline_val
+        best_train_loss_recent = None
+        steps_done = 0
+        stopped_early = False
+        stop_reason = "completed_with_best_snapshot_restored"
+
+        while steps_done < total_steps:
+            current_chunk = min(chunk_steps, total_steps - steps_done)
+
+            train_stats = self.runtime.train_steps(current_chunk)
+            metrics = self.runtime.evaluate()
+            val = float(metrics.get("val_loss", float("inf")))
+            steps_done += current_chunk
+
+            self.logger.info(
+                "Guarded chunk | steps_done=%d/%d train_loss_recent=%.4f val_loss=%.4f baseline_val=%.4f best_val=%.4f",
+                steps_done,
+                total_steps,
+                float(train_stats.get("train_loss_recent", float("nan"))),
+                val,
+                baseline_val,
+                best_val,
+            )
+
+            if val < best_val:
+                best_val = val
+                best_metrics = dict(metrics)
+                best_snapshot = self.runtime.snapshot_state()
+                best_train_loss_recent = float(train_stats.get("train_loss_recent", float("nan")))
+
+            too_far_from_best = val > (best_val + tol_abs)
+            too_far_from_baseline = val > (baseline_val + tol_drift)
+
+            if too_far_from_best or too_far_from_baseline:
+                stopped_early = True
+                stop_reason = "rollback_guard_triggered"
+                self.logger.info(
+                    "Guarded stop | steps_done=%d val_loss=%.4f best_val=%.4f baseline_val=%.4f tol_abs=%.4f tol_drift=%.4f",
+                    steps_done,
+                    val,
+                    best_val,
+                    baseline_val,
+                    tol_abs,
+                    tol_drift,
+                )
+                break
+
+        self.runtime.restore_state(best_snapshot)
+
+        final_metrics = dict(best_metrics)
+        if best_train_loss_recent is not None:
+            final_metrics["train_loss"] = float(best_train_loss_recent)
+        final_metrics["global_step"] = int(self.runtime.global_step)
+        final_metrics["guarded_steps_done"] = int(steps_done)
+        final_metrics["guarded_stopped_early"] = bool(stopped_early)
+        final_metrics["guarded_stop_reason"] = stop_reason
+        final_metrics["baseline_val_loss"] = float(baseline_val)
+        final_metrics["val_loss_delta"] = float(final_metrics["val_loss"] - baseline_val)
+        final_metrics["val_loss_improved"] = bool(final_metrics["val_loss"] < baseline_val)
+
+        return final_metrics
+
     def run_cycle(self, cycle_index: int) -> Dict[str, Any]:
+        import sys
+        print("RUNTIME_MARK: run_cycle ENTERED :: " + __file__, file=sys.stderr, flush=True)
         cycle_start = time.perf_counter()
         self.logger.info("Cycle %04d started.", cycle_index)
 
@@ -1749,11 +1894,7 @@ class SwarmEngine:
         decisions = self._decide_patches(patches, votes_by_patch)
         applied_records = self._apply_accepted_patches(patches, decisions)
 
-        train_stats = self.runtime.train_steps(self.runtime.tcfg.max_iters_per_cycle)
-        metrics = self.runtime.evaluate()
-        metrics["train_loss"] = float(train_stats["train_loss_recent"])
-        metrics["train_throughput_tokens_per_sec"] = float(train_stats["train_throughput_tokens_per_sec"])
-        metrics["global_step"] = int(train_stats["global_step"])
+        metrics = self._guarded_train_cycle(self.runtime.tcfg.max_iters_per_cycle)
         metrics["applied_patch_count"] = sum(1 for r in applied_records if r.success)
         metrics["rejected_patch_count"] = sum(1 for d in decisions if not d.applied)
         metrics["alive_by_role"] = count_alive_by_role(list(self.agent_states.values()))
@@ -1876,6 +2017,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--patch-trial-train-steps", type=int, default=40)
     parser.add_argument("--reduced-roles-mode", action="store_true", default=False)
     parser.add_argument("--baseline-only", action="store_true", default=False)
+    parser.add_argument("--resume", type=str, default=None)
     return parser
 
 
@@ -1919,6 +2061,16 @@ def main() -> None:
         reduced_roles_mode=args.reduced_roles_mode,
     )
     engine = SwarmEngine(train_cfg=train_cfg, model_cfg=model_cfg, swarm_cfg=swarm_cfg)
+
+    if args.resume:
+        info = engine.runtime.load_checkpoint(args.resume)
+        engine.logger.info(
+            "Resumed from checkpoint=%s best_val_loss=%.4f global_step=%d loss=%s",
+            info["checkpoint"],
+            float(info["best_val_loss"]),
+            int(info["global_step"]),
+            str(info["loss_name"]),
+        )
     if args.baseline_only:
         metrics = engine.runtime.evaluate()
         print(json.dumps({"mode": "baseline_only", "metrics": metrics}, sort_keys=True))
