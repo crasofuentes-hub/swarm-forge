@@ -1892,31 +1892,9 @@ class SwarmEngine:
             patches = patches[: self.swarm_cfg.max_patch_eval_candidates]
         votes_by_patch = self._collect_votes(patches, runtime_metrics=baseline_metrics)
         decisions = self._decide_patches(patches, votes_by_patch)
-        if getattr(self, "disable_patch_apply", False):
-            applied_records = []
-            for d in decisions:
-                if d.applied:
-                    d.applied = False
-                    d.reason = "patch_apply_disabled_from_cli"
-        else:
-            applied_records = self._apply_accepted_patches(patches, decisions)
-        if getattr(self, "disable_guarded_train", False):
-            train_stats = self.runtime.train_steps(self.runtime.tcfg.max_iters_per_cycle)
-            metrics = self.runtime.evaluate()
-            metrics["train_loss"] = float(train_stats["train_loss_recent"])
-            metrics["train_throughput_tokens_per_sec"] = float(train_stats["train_throughput_tokens_per_sec"])
-            metrics["global_step"] = int(train_stats["global_step"])
-            metrics["guarded_steps_done"] = int(self.runtime.tcfg.max_iters_per_cycle)
-            metrics["guarded_stopped_early"] = False
-            metrics["guarded_stop_reason"] = "disabled_from_cli"
-        else:
-            metrics = self._guarded_train_cycle(
-                self.runtime.tcfg.max_iters_per_cycle,
-                chunk_steps=int(getattr(self, "guarded_chunk_steps", 20)),
-                tol_abs=float(getattr(self, "guarded_tol_abs", 0.002)),
-                tol_drift=float(getattr(self, "guarded_tol_drift", 0.010)),
-            )
+        applied_records = self._apply_accepted_patches(patches, decisions)
 
+        metrics = self._guarded_train_cycle(self.runtime.tcfg.max_iters_per_cycle)
         metrics["applied_patch_count"] = sum(1 for r in applied_records if r.success)
         metrics["rejected_patch_count"] = sum(1 for d in decisions if not d.applied)
         metrics["alive_by_role"] = count_alive_by_role(list(self.agent_states.values()))
@@ -2040,10 +2018,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reduced-roles-mode", action="store_true", default=False)
     parser.add_argument("--baseline-only", action="store_true", default=False)
     parser.add_argument("--resume", type=str, default=None)
-    parser.add_argument("--disable-guarded-train", action="store_true", default=False)
-    parser.add_argument("--guarded-chunk-steps", type=int, default=20)
-    parser.add_argument("--guarded-tol-abs", type=float, default=0.002)    parser.add_argument("--guarded-tol-drift", type=float, default=0.010)
-    parser.add_argument("--disable-patch-apply", action="store_true", default=False)
     return parser
 
 
@@ -2085,12 +2059,10 @@ def main() -> None:
         patch_apply_approval_threshold=args.approval_threshold,
         patch_apply_score_threshold=args.score_threshold,
         reduced_roles_mode=args.reduced_roles_mode,
-        )
+    )
     engine = SwarmEngine(train_cfg=train_cfg, model_cfg=model_cfg, swarm_cfg=swarm_cfg)
-    engine.disable_guarded_train = bool(args.disable_guarded_train)
-    engine.guarded_chunk_steps = int(args.guarded_chunk_steps)
-    engine.guarded_tol_abs = float(args.guarded_tol_abs)    engine.guarded_tol_drift = float(args.guarded_tol_drift)
-    engine.disable_patch_apply = bool(args.disable_patch_apply)    if args.resume:
+
+    if args.resume:
         info = engine.runtime.load_checkpoint(args.resume)
         engine.logger.info(
             "Resumed from checkpoint=%s best_val_loss=%.4f global_step=%d loss=%s",
