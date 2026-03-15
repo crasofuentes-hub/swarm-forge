@@ -17,3 +17,10 @@ data/
 checkpoints/
 .DS_Store
 Thumbs.db
+runs/logs/
+runs/*/checkpoints/
+swarm_forge/core.py.bak.*
+protected_best_v3/
+protected_best_v4/
+protected_best_v5/
+protected_best_v6/

@@ -195,3 +195,25 @@ That is the real idea.
 ## Final Principle
 
 Swarm Forge should be judged less by how many agents it has and more by whether it can keep improving training under controlled, auditable, checkpointed search.
+
+## Validated Freeze
+
+**Current validated freeze**
+- Commit: `786c762`
+- Tag: `freeze-guarded-1.5932`
+- Machine of record: `MARLINE`
+- Best validated `val_loss`: **1.5932**
+- Best validated checkpoint:
+  `runs/guarded_real_from_16094/checkpoints/checkpoint_best_cycle_0001_valloss_1.5932.pt`
+
+**What was validated**
+- `model_arch` is blocked in fine-tuning when the run is already in a stable regime.
+- Resume now enforces the CLI learning rate after optimizer state restoration.
+- Training now uses guarded chunk execution with intermediate validation and rollback to the best state inside the cycle.
+- The best point of a cycle can be preserved even when later chunks degrade validation.
+
+**Recent validated trajectory**
+- `1.6208`
+- `1.6130`
+- `1.6094`
+- `1.5932`
