@@ -327,6 +327,18 @@ class TinyShakespeareData:
         return x.to(device), y.to(device)
 
 
+def build_dataset(dataset_name: str, data_dir: str, cfg: TrainingConfig, logger: logging.Logger):
+    name = str(dataset_name).strip().lower()
+    if name == "tinyshakespeare":
+        return TinyShakespeareData(data_dir, cfg, logger)
+    if name == "wikitext2":
+        raise NotImplementedError(
+            "WikiText-2 dataset adapter is not implemented yet. "
+            "Dataset selection is now decoupled, but the second dataset loader still needs to be added."
+        )
+    raise ValueError(f"Unsupported dataset_name: {dataset_name}")
+
+
 @dataclass
 class AppliedPatchRecord:
     patch_id: str
@@ -1461,7 +1473,7 @@ class SwarmEngine:
         self.csv_path = self.logs_dir / "cycles.csv"
         self.logger = self._build_logger()
         set_global_seed(train_cfg.seed)
-        self.dataset = TinyShakespeareData(swarm_cfg.data_dir, train_cfg, self.logger)
+        self.dataset = build_dataset(swarm_cfg.dataset_name, swarm_cfg.data_dir, train_cfg, self.logger)
         self.model_cfg.vocab_size = self.dataset.tokenizer.vocab_size
         self.model_cfg.block_size = train_cfg.block_size
         self.runtime = TrainingRuntime(train_cfg, model_cfg, self.dataset, self.output_dir, self.logger)
