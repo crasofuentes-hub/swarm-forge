@@ -1,1 +1,1 @@
-from .core import *
+"""Swarm Forge package."""
