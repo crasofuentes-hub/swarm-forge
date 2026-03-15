@@ -438,6 +438,22 @@ class AppliedPatchRecord:
     details: Dict[str, Any] = field(default_factory=dict)
 
 
+
+@dataclass
+class ExperimentProposal:
+    proposal_id: str
+    author_id: str
+    author_role: str
+    timestamp: str
+    dataset_name: str
+    hypothesis: str
+    changed_variable: str
+    proposed_value: Any
+    success_metric: str
+    success_threshold: float
+    rollback_condition: str
+    notes: str = ""
+
 class LayerNorm(nn.Module):
     def __init__(self, ndim: int, bias: bool):
         super().__init__()
