@@ -1615,6 +1615,7 @@ class SwarmEngine:
         self.metrics_path = self.logs_dir / "metrics.jsonl"
         self.decisions_path = self.logs_dir / "patch_decisions.jsonl"
         self.lifecycle_path = self.logs_dir / "lifecycle.jsonl"
+        self.proposals_path = self.logs_dir / "experiment_proposals.jsonl"
         self.csv_path = self.logs_dir / "cycles.csv"
         self.logger = self._build_logger()
         set_global_seed(train_cfg.seed)
