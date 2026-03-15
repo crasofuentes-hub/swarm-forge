@@ -1678,6 +1678,13 @@ class SwarmEngine:
             raise RuntimeError(f"Expected 120 agents, got {len(self.workers)}.")
         self.logger.info("Initialized %d agents across %d roles.", len(self.workers), len(self.role_to_agent_ids))
 
+
+    def _append_experiment_proposal(self, proposal: ExperimentProposal) -> None:
+        append_jsonl(self.proposals_path, {
+            "timestamp": utc_now(),
+            **asdict(proposal),
+        })
+
     def _init_csv(self) -> None:
         if not self.csv_path.exists():
             with self.csv_path.open("w", newline="", encoding="utf-8") as fh:
