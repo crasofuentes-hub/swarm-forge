@@ -68,3 +68,13 @@ This is sufficient evidence that the runtime is no longer restricted to TinyShak
 - conclusion:
   - current WikiText-2 regime should be frozen at `2.5864`
   - further progress will require a new search axis, not more pushes on the same recipe
+## Bounded local sweep result
+- sweep winner:
+  - `lr = 5e-5`
+  - `steps = 20`
+- baseline before sweep: `2.5864`
+- new best result: `2.5803`
+
+## Interpretation
+A bounded sweep around the best known WikiText-2 regime found a real improvement.
+This indicates the current optimization landscape is narrow but still exploitable under guarded execution.
