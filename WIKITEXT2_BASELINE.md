@@ -59,3 +59,12 @@ Swarm Forge successfully completed a controlled second-dataset baseline on WikiT
 
 ## Scientific interpretation
 This is sufficient evidence that the runtime is no longer restricted to TinyShakespeare and that guarded training remains operational on a second dataset.
+## Freeze after guarded continuation search
+- best checkpoint filename marker: `2.5970`
+- best reproduced baseline after resume: `2.5864`
+- rejected continuations:
+  - `lr = 1.25e-5` produced catastrophic guarded chunk drift (`val_loss = 80.5379`)
+  - `lr = 2.5e-5` with `20` steps also produced catastrophic guarded chunk drift (`val_loss = 55.5966`)
+- conclusion:
+  - current WikiText-2 regime should be frozen at `2.5864`
+  - further progress will require a new search axis, not more pushes on the same recipe
