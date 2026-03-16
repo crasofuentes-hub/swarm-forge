@@ -775,7 +775,7 @@ class TrainingRuntime:
         self._cleanup_old_checkpoints()
         return path
 
-    def load_checkpoint(self, path: str) -> Dict[str, Any]:
+    def load_checkpoint(self, path: str, reset_optimizer_scheduler: bool = False) -> Dict[str, Any]:
         """
         Load a previously saved checkpoint and restore model/optimizer/scheduler state.
         Designed for continuation on the same architecture family.
@@ -2181,6 +2181,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reduced-roles-mode", action="store_true", default=False)
     parser.add_argument("--baseline-only", action="store_true", default=False)
     parser.add_argument("--resume", type=str, default=None)
+    parser.add_argument("--resume-reset-state", action="store_true", default=False)
     return parser
 
 
@@ -2227,7 +2228,7 @@ def main() -> None:
     engine = SwarmEngine(train_cfg=train_cfg, model_cfg=model_cfg, swarm_cfg=swarm_cfg)
 
     if args.resume:
-        info = engine.runtime.load_checkpoint(args.resume)
+        info = engine.runtime.load_checkpoint(args.resume, reset_optimizer_scheduler=bool(args.resume_reset_state))
         engine.logger.info(
             "Resumed from checkpoint=%s best_val_loss=%.4f global_step=%d loss=%s",
             info["checkpoint"],
