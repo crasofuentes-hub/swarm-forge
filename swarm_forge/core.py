@@ -1975,8 +1975,6 @@ class SwarmEngine:
             })
 
     def _guarded_train_cycle(self, total_steps: int, chunk_steps: int = 20, tol_abs: float = 0.002, tol_drift: float = 0.010) -> Dict[str, Any]:
-        import sys
-        print("RUNTIME_MARK: guarded_train_cycle ENTERED :: " + __file__, file=sys.stderr, flush=True)
 
         baseline_metrics = self.runtime.evaluate()
         baseline_val = float(baseline_metrics.get("val_loss", float("inf")))
@@ -2046,8 +2044,6 @@ class SwarmEngine:
         return final_metrics
 
     def run_cycle(self, cycle_index: int) -> Dict[str, Any]:
-        import sys
-        print("RUNTIME_MARK: run_cycle ENTERED :: " + __file__, file=sys.stderr, flush=True)
         cycle_start = time.perf_counter()
         self.logger.info("Cycle %04d started.", cycle_index)
 
