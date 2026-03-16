@@ -78,3 +78,15 @@ This is sufficient evidence that the runtime is no longer restricted to TinyShak
 ## Interpretation
 A bounded sweep around the best known WikiText-2 regime found a real improvement.
 This indicates the current optimization landscape is narrow but still exploitable under guarded execution.
+## Final micro-sweep result
+- winner: `steps = 15`
+- learning_rate = `5e-5`
+- resume_reset_state = `true`
+- baseline before micro-sweep: `2.5864`
+- new best result: `2.5643`
+- checkpoint:
+  - `runs\wikitext2_exp8_steps15\checkpoints\checkpoint_best_cycle_0001_valloss_2.5643.pt`
+
+## Final conclusion
+The best currently validated WikiText-2 result in this regime is `2.5643`.
+This result was obtained by resuming from the `2.5970` checkpoint with optimizer/scheduler reset enabled, using `learning_rate = 5e-5` and `15` guarded steps.
