@@ -41,6 +41,8 @@ First formal second-dataset baseline for Swarm Forge.
 - chunk 40 validation loss: `3.0648`
 - saved improved checkpoint:
   - `runs\wikitext2_baseline\checkpoints\checkpoint_best_cycle_0001_valloss_3.0648.pt`
+- `runs\wikitext2_exp1_lr5e5\checkpoints\checkpoint_best_cycle_0001_valloss_2.6720.pt`
+- `runs\wikitext2_exp4_lr2p5e5\checkpoints\checkpoint_best_cycle_0001_valloss_2.5970.pt`
 
 ## Final summary
 - train_loss = `3.3072`
