@@ -6,6 +6,7 @@ import logging
 from dataclasses import asdict
 from typing import Any, Dict
 
+from .common import utc_now
 from .config import ModelConfig, SwarmConfig
 from .patches import Patch
 from .proposals import AppliedPatchRecord
@@ -39,7 +40,7 @@ class PatchApplier:
                 patch_type=patch.patch_type,
                 author_id=patch.author_id,
                 role=patch.role,
-                applied_at=_core.utc_now(),
+                applied_at=utc_now(),
                 payload_hash=patch.payload_hash(),
                 success=True,
                 details=details,
@@ -54,7 +55,7 @@ class PatchApplier:
                 patch_type=patch.patch_type,
                 author_id=patch.author_id,
                 role=patch.role,
-                applied_at=_core.utc_now(),
+                applied_at=utc_now(),
                 payload_hash=patch.payload_hash(),
                 success=False,
                 details={"error": str(exc)},

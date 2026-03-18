@@ -13,13 +13,12 @@ except ImportError as exc:
     raise RuntimeError("PyTorch is required. Install torch before running this script.") from exc
 
 from .config import TrainingConfig
+from .common import ensure_dir, utc_now
 from .core import (
     TINY_SHAKESPEARE_URL,
     WIKITEXT2_TRAIN_URL,
     WIKITEXT2_VALID_URL,
     WIKITEXT2_TEST_URL,
-    ensure_dir,
-    utc_now,
 )
 
 

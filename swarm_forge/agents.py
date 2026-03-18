@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from typing import Any, Dict
 
-from .core import stable_hash, utc_now
+from .common import stable_hash, utc_now
 from .patches import Patch, PatchVote
 
 

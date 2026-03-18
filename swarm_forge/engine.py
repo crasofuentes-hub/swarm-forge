@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
+
 import logging
 from dataclasses import asdict
 from typing import Any, Dict
@@ -94,7 +96,7 @@ class ParallelBackend:
 
 def __getattr__(name: str):
     if name in {"TrainingRuntime", "SwarmEngine"}:
-        from . import core as _core
+        _core = importlib.import_module(".core", __package__)
         return getattr(_core, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

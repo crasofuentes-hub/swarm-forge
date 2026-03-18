@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict
 
-from .core import PATCH_TYPES, stable_hash
+from .common import stable_hash
+from .core import PATCH_TYPES
 
 
 @dataclass

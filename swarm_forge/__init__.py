@@ -4,11 +4,12 @@ import logging
 from dataclasses import asdict
 
 from .config import TrainingConfig, ModelConfig, SwarmConfig
-from .core import build_arg_parser, main, utc_now
+from .core import TrainingRuntime, SwarmEngine, build_arg_parser, main, utc_now
 from .data import CharTokenizer, TinyShakespeareData, WikiText2Data, build_dataset
-from .engine import TrainingRuntime, ParallelBackend, SwarmEngine
+from .engine import ParallelBackend
 from .patches import Patch, PatchVote, PatchDecision, PatchConflictResolver
 from .patch_applier import PatchApplier
+from .research import CampaignConfig, TrialSpec, TrialResult, CampaignSummary, score_trial_result, select_best_trial, build_campaign_summary
 from .agents import (
     AgentState,
     Agent,
@@ -45,6 +46,13 @@ __all__ = [
     "PatchDecision",
     "PatchConflictResolver",
     "PatchApplier",
+    "CampaignConfig",
+    "TrialSpec",
+    "TrialResult",
+    "CampaignSummary",
+    "score_trial_result",
+    "select_best_trial",
+    "build_campaign_summary",
     "AgentState",
     "Agent",
     "BugHunterAgent",

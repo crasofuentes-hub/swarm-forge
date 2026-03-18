@@ -85,10 +85,10 @@ WIKITEXT2_TEST_URL = "https://cosmo.zip/pub/datasets/wikitext-2-raw/wiki.test.ra
 
 
 from .config import ModelConfig, SwarmConfig, TrainingConfig
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
+from .common import append_jsonl, ensure_dir, stable_hash, utc_now
+from .contracts import ExecutionResult, RuntimeSnapshot
+from .patch_applier import PatchApplier
+from .agents import AgentState, Agent, BugHunterAgent, HyperparamTunerAgent, LayerArchitectAgent, TokenizerOptimizerAgent, DataAugmentorAgent, LossEngineerAgent, SaboteurAgent, ResilienceCheckerAgent, SpeedDemonAgent, MemoryWardenAgent, EvaluatorAgent, ArbiterAgent, build_patch, ROLE_TO_CLASS, LocalAgentWorker
 
 def set_global_seed(seed: int) -> None:
     random.seed(seed)
@@ -97,23 +97,6 @@ def set_global_seed(seed: int) -> None:
     os.environ["PYTHONHASHSEED"] = str(seed)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
-
-
-def stable_hash(payload: Any) -> str:
-    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
-
-
-def ensure_dir(path: str | Path) -> Path:
-    p = Path(path)
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def append_jsonl(path: Path, data: Dict[str, Any]) -> None:
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(data, sort_keys=True, default=str) + "\n")
-
 
 def current_memory_allocated(device: str) -> int:
     if device.startswith("cuda") and torch.cuda.is_available():
@@ -142,6 +125,7 @@ def count_alive_by_role(agent_states: Sequence["AgentState"]) -> Dict[str, int]:
 from .data import CharTokenizer, TinyShakespeareData, WikiText2Data, build_dataset
 
 from .proposals import AppliedPatchRecord, ExperimentProposal, build_experiment_proposal
+from .patches import Patch, PatchVote, PatchDecision, PatchConflictResolver
 
 class LayerNorm(nn.Module):
     def __init__(self, ndim: int, bias: bool):
@@ -358,35 +342,35 @@ class TrainingRuntime:
             except Exception as exc:
                 self.logger.warning("torch.compile failed, continuing without compile: %s", exc)
 
-    def snapshot_state(self) -> Dict[str, Any]:
-        return {
-            "training_config": asdict(self.tcfg),
-            "model_config": asdict(self.mcfg),
-            "loss_name": self.loss_name,
-            "best_val_loss": self.best_val_loss,
-            "global_step": self.global_step,
-            "tokenizer_merges": list(self.dataset.tokenizer.merges),
-            "dataset_text_hash": stable_hash(self.dataset.text[:50000]),
-            "model_state_dict": {k: v.detach().cpu() for k, v in self.model.state_dict().items()},
-            "optimizer_state_dict": self.optimizer.state_dict(),
-            "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler is not None else None,
-        }
+    def snapshot_state(self) -> RuntimeSnapshot:
+        return RuntimeSnapshot(
+            training_config=asdict(self.tcfg),
+            model_config=asdict(self.mcfg),
+            loss_name=self.loss_name,
+            best_val_loss=self.best_val_loss,
+            global_step=self.global_step,
+            tokenizer_merges=list(self.dataset.tokenizer.merges),
+            dataset_text_hash=stable_hash(self.dataset.text[:50000]),
+            model_state_dict={k: v.detach().cpu() for k, v in self.model.state_dict().items()},
+            optimizer_state_dict=self.optimizer.state_dict(),
+            scheduler_state_dict=self.scheduler.state_dict() if self.scheduler is not None else None,
+        )
 
-    def restore_state(self, snapshot: Dict[str, Any]) -> None:
-        self.tcfg = TrainingConfig(**snapshot["training_config"])
-        self.mcfg = ModelConfig(**snapshot["model_config"])
-        self.loss_name = snapshot["loss_name"]
-        self.best_val_loss = snapshot["best_val_loss"]
-        self.global_step = snapshot["global_step"]
-        self.dataset.tokenizer.update_merges(snapshot["tokenizer_merges"])
+    def restore_state(self, snapshot: RuntimeSnapshot) -> None:
+        self.tcfg = TrainingConfig(**snapshot.training_config)
+        self.mcfg = ModelConfig(**snapshot.model_config)
+        self.loss_name = snapshot.loss_name
+        self.best_val_loss = snapshot.best_val_loss
+        self.global_step = snapshot.global_step
+        self.dataset.tokenizer.update_merges(snapshot.tokenizer_merges)
         self.model = NanoGPT(self.mcfg).to(self.device)
-        self.model.load_state_dict(snapshot["model_state_dict"])
+        self.model.load_state_dict(snapshot.model_state_dict)
         self.model.gradient_checkpointing = self.tcfg.use_gradient_checkpointing
         self.optimizer = self._build_optimizer()
-        self.optimizer.load_state_dict(snapshot["optimizer_state_dict"])
+        self.optimizer.load_state_dict(snapshot.optimizer_state_dict)
         self.scheduler = self._build_scheduler()
-        if self.scheduler is not None and snapshot["scheduler_state_dict"] is not None:
-            self.scheduler.load_state_dict(snapshot["scheduler_state_dict"])
+        if self.scheduler is not None and snapshot.scheduler_state_dict is not None:
+            self.scheduler.load_state_dict(snapshot.scheduler_state_dict)
 
     def active_loss_fn(self) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
         def cross_entropy(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
@@ -547,7 +531,7 @@ class TrainingRuntime:
         self.model.train()
         return metrics
 
-    def train_steps(self, num_steps: int) -> Dict[str, Any]:
+    def train_steps(self, num_steps: int) -> ExecutionResult:
         self.model.train()
         self.model.gradient_checkpointing = self.tcfg.use_gradient_checkpointing
         loss_fn = self.active_loss_fn()
@@ -581,20 +565,11 @@ class TrainingRuntime:
             self.global_step += 1
         elapsed = max(1e-9, time.perf_counter() - start)
         throughput = (num_steps * self.tcfg.batch_size * self.tcfg.block_size) / elapsed
-        return {
-            "train_loss_recent": total_loss / max(1, num_steps),
-            "train_throughput_tokens_per_sec": float(throughput),
-            "global_step": self.global_step,
-        }
-
-
-from .patches import Patch, PatchVote, PatchDecision, PatchConflictResolver
-
-from .patch_applier import PatchApplier
-
-from .agents import AgentState, Agent, BugHunterAgent, HyperparamTunerAgent, LayerArchitectAgent, TokenizerOptimizerAgent, DataAugmentorAgent, LossEngineerAgent, SaboteurAgent, ResilienceCheckerAgent, SpeedDemonAgent, MemoryWardenAgent, EvaluatorAgent, ArbiterAgent, build_patch, ROLE_TO_CLASS, LocalAgentWorker
-
-from .engine import ParallelBackend
+        return ExecutionResult(
+            train_loss_recent=total_loss / max(1, num_steps),
+            train_throughput_tokens_per_sec=float(throughput),
+            global_step=self.global_step,
+        )
 
 class SwarmEngine:
     def __init__(self, train_cfg: TrainingConfig, model_cfg: ModelConfig, swarm_cfg: SwarmConfig):
@@ -1139,6 +1114,7 @@ class SwarmEngine:
             })
             self.parallel.shutdown()
             self.logger.info("Swarm Forge shutdown complete. Final checkpoint: %s", final_ckpt)
+
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
