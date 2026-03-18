@@ -94,3 +94,64 @@ def test_build_campaign_summary():
     assert summary.best_objective_value == 2.54
     assert summary.total_trials == 3
     assert summary.successful_trials == 2
+def test_proposal_to_trial_spec_mapping():
+    proposal = sf.ExperimentProposal(
+        proposal_id="prop-001",
+        author_id="HyperparamTuner-00",
+        author_role="HyperparamTuner",
+        timestamp="2026-03-18T00:00:00Z",
+        dataset_name="wikitext2",
+        hypothesis="Smaller LR may stabilize resumed optimization.",
+        changed_variable="learning_rate",
+        proposed_value=5e-5,
+        success_metric="val_loss",
+        success_threshold=2.56,
+        rollback_condition="val_loss > 2.60",
+        notes="bounded resume-reset sweep",
+    )
+
+    trial = sf.proposal_to_trial_spec(proposal)
+
+    assert trial.trial_id == "prop-001"
+    assert trial.campaign_id == "wikitext2:val_loss"
+    assert trial.overrides["learning_rate"] == 5e-5
+    assert "wikitext2" in trial.tags
+    assert "HyperparamTuner" in trial.tags
+
+
+def test_proposals_to_trial_specs_batch():
+    proposals = [
+        sf.ExperimentProposal(
+            proposal_id="prop-001",
+            author_id="HyperparamTuner-00",
+            author_role="HyperparamTuner",
+            timestamp="2026-03-18T00:00:00Z",
+            dataset_name="wikitext2",
+            hypothesis="LR adjustment",
+            changed_variable="learning_rate",
+            proposed_value=5e-5,
+            success_metric="val_loss",
+            success_threshold=2.56,
+            rollback_condition="val_loss > 2.60",
+        ),
+        sf.ExperimentProposal(
+            proposal_id="prop-002",
+            author_id="LossEngineer-00",
+            author_role="LossEngineer",
+            timestamp="2026-03-18T00:01:00Z",
+            dataset_name="wikitext2",
+            hypothesis="Try light label smoothing",
+            changed_variable="label_smoothing",
+            proposed_value=0.02,
+            success_metric="val_loss",
+            success_threshold=2.56,
+            rollback_condition="val_loss > 2.60",
+        ),
+    ]
+
+    trials = sf.proposals_to_trial_specs(proposals, campaign_id="camp-wiki-a")
+
+    assert len(trials) == 2
+    assert trials[0].campaign_id == "camp-wiki-a"
+    assert trials[1].campaign_id == "camp-wiki-a"
+    assert trials[1].overrides["label_smoothing"] == 0.02

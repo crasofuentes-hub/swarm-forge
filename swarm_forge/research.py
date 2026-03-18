@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from .proposals import ExperimentProposal
+
 
 @dataclass
 class CampaignConfig:
@@ -74,3 +76,27 @@ def build_campaign_summary(
         total_trials=len(results),
         successful_trials=successful_trials,
     )
+def proposal_to_trial_spec(proposal: ExperimentProposal, campaign_id: Optional[str] = None) -> TrialSpec:
+    resolved_campaign_id = campaign_id or f"{proposal.dataset_name}:{proposal.success_metric}"
+    overrides = {
+        proposal.changed_variable: proposal.proposed_value,
+    }
+    tags = [
+        proposal.dataset_name,
+        proposal.author_role,
+        proposal.changed_variable,
+    ]
+    return TrialSpec(
+        trial_id=proposal.proposal_id,
+        campaign_id=resolved_campaign_id,
+        hypothesis=proposal.hypothesis,
+        overrides=overrides,
+        tags=tags,
+    )
+
+
+def proposals_to_trial_specs(
+    proposals: List[ExperimentProposal],
+    campaign_id: Optional[str] = None,
+) -> List[TrialSpec]:
+    return [proposal_to_trial_spec(p, campaign_id=campaign_id) for p in proposals]
