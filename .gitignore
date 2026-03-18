@@ -1,4 +1,4 @@
-﻿__pycache__/
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
@@ -24,3 +24,6 @@ protected_best_v3/
 protected_best_v4/
 protected_best_v5/
 protected_best_v6/
+
+.venv311/
+*.bak.*
