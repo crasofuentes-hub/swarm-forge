@@ -29,12 +29,22 @@ class CharTokenizer:
         self.stoi = {ch: i for i, ch in enumerate(vocab)}
         self.itos = {i: ch for ch, i in self.stoi.items()}
         self.vocab_size = len(vocab)
+        self.merges: List[Tuple[str, str]] = []
 
     def encode(self, text: str) -> List[int]:
         return [self.stoi[ch] for ch in text]
 
     def decode(self, ids: List[int]) -> str:
         return "".join(self.itos[i] for i in ids)
+
+    def update_merges(self, merges: List[Tuple[str, str]]) -> None:
+        normalized: List[Tuple[str, str]] = []
+        for item in merges:
+            if not isinstance(item, tuple) or len(item) != 2:
+                raise ValueError("Each merge entry must be a 2-tuple.")
+            left, right = item
+            normalized.append((str(left), str(right)))
+        self.merges = normalized
 
 
 class TinyShakespeareData:
