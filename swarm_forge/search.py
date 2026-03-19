@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 from .research import TrialSpec
+from .proposals import ExperimentProposal
 
 
 @dataclass
@@ -123,3 +124,17 @@ class SearchSession:
             trial_id=next_state.state_id,
             hypothesis=hypothesis,
         )
+def proposal_to_search_action(proposal: ExperimentProposal) -> SearchAction:
+    return SearchAction(
+        action_id=proposal.proposal_id,
+        action_type="proposal_override",
+        overrides={
+            proposal.changed_variable: proposal.proposed_value,
+        },
+        source_proposal_id=proposal.proposal_id,
+        description=proposal.hypothesis,
+    )
+
+
+def proposals_to_search_actions(proposals: list[ExperimentProposal]) -> list[SearchAction]:
+    return [proposal_to_search_action(p) for p in proposals]

@@ -195,3 +195,62 @@ def test_search_session_transition_to_trial_spec():
     assert trial.trial_id == "s1"
     assert trial.overrides["learning_rate"] == 1e-4
     assert session.get_state("s1").depth == 1
+def test_proposal_to_search_action_mapping():
+    proposal = sf.ExperimentProposal(
+        proposal_id="prop-search-001",
+        author_id="HyperparamTuner-00",
+        author_role="HyperparamTuner",
+        timestamp="2026-03-19T00:00:00Z",
+        dataset_name="tinyshakespeare",
+        hypothesis="lower learning rate for stability",
+        changed_variable="learning_rate",
+        proposed_value=5e-5,
+        success_metric="val_loss",
+        success_threshold=2.5,
+        rollback_condition="val_loss > 2.7",
+    )
+
+    action = sf.proposal_to_search_action(proposal)
+
+    assert action.action_id == "prop-search-001"
+    assert action.action_type == "proposal_override"
+    assert action.overrides["learning_rate"] == 5e-5
+    assert action.source_proposal_id == "prop-search-001"
+    assert "learning rate" in action.description
+
+
+def test_proposals_to_search_actions_batch():
+    proposals = [
+        sf.ExperimentProposal(
+            proposal_id="prop-search-001",
+            author_id="HyperparamTuner-00",
+            author_role="HyperparamTuner",
+            timestamp="2026-03-19T00:00:00Z",
+            dataset_name="tinyshakespeare",
+            hypothesis="lower learning rate",
+            changed_variable="learning_rate",
+            proposed_value=5e-5,
+            success_metric="val_loss",
+            success_threshold=2.5,
+            rollback_condition="val_loss > 2.7",
+        ),
+        sf.ExperimentProposal(
+            proposal_id="prop-search-002",
+            author_id="LossEngineer-00",
+            author_role="LossEngineer",
+            timestamp="2026-03-19T00:01:00Z",
+            dataset_name="tinyshakespeare",
+            hypothesis="small label smoothing",
+            changed_variable="label_smoothing",
+            proposed_value=0.02,
+            success_metric="val_loss",
+            success_threshold=2.5,
+            rollback_condition="val_loss > 2.7",
+        ),
+    ]
+
+    actions = sf.proposals_to_search_actions(proposals)
+
+    assert len(actions) == 2
+    assert actions[0].source_proposal_id == "prop-search-001"
+    assert actions[1].overrides["label_smoothing"] == 0.02
