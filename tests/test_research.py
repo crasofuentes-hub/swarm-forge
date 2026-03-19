@@ -255,3 +255,92 @@ def test_campaign_runner_rejects_mismatched_result_campaign_id():
         assert False, "Expected ValueError for mismatched campaign_id"
     except ValueError as exc:
         assert "campaign_id" in str(exc)
+def test_trial_executor_runs_local_trial_and_returns_result(tmp_path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "input.txt").write_text(("To be, or not to be.\n" * 300), encoding="utf-8")
+
+    campaign = sf.CampaignConfig(
+        campaign_id="camp-exec-1",
+        dataset_name="tinyshakespeare",
+        objective_metric="val_loss",
+        maximize=False,
+    )
+
+    base_train_cfg = sf.TrainingConfig(
+        device="cpu",
+        batch_size=4,
+        micro_batch_size=4,
+        block_size=32,
+        max_iters_per_cycle=2,
+        eval_iters=2,
+        amp_enabled=False,
+        patch_trial_train_steps=1,
+    )
+    base_model_cfg = sf.ModelConfig(
+        vocab_size=256,
+        block_size=32,
+        n_layer=2,
+        n_head=2,
+        n_embd=64,
+        dropout=0.1,
+    )
+
+    executor = sf.TrialExecutor(
+        campaign=campaign,
+        base_train_cfg=base_train_cfg,
+        base_model_cfg=base_model_cfg,
+        data_dir=str(data_dir),
+        output_root=str(tmp_path / "runs"),
+    )
+
+    trial = sf.TrialSpec(
+        trial_id="trial-001",
+        campaign_id="camp-exec-1",
+        hypothesis="lower lr quick probe",
+        overrides={"learning_rate": 5e-5, "patch_trial_train_steps": 1},
+    )
+
+    result = executor.execute(trial)
+
+    assert result.trial_id == "trial-001"
+    assert result.campaign_id == "camp-exec-1"
+    assert result.success is True
+    assert result.objective_metric == "val_loss"
+    assert isinstance(result.objective_value, float)
+    assert result.metrics["initial"]["val_loss"] >= 0.0
+    assert result.metrics["final"]["val_loss"] >= 0.0
+    assert result.metrics["train"]["global_step"] >= 1
+    assert result.checkpoint_path is not None
+
+
+def test_trial_executor_applies_training_overrides_only():
+    campaign = sf.CampaignConfig(
+        campaign_id="camp-exec-2",
+        dataset_name="tinyshakespeare",
+    )
+
+    base_train_cfg = sf.TrainingConfig(device="cpu", amp_enabled=False)
+    base_model_cfg = sf.ModelConfig()
+
+    executor = sf.TrialExecutor(
+        campaign=campaign,
+        base_train_cfg=base_train_cfg,
+        base_model_cfg=base_model_cfg,
+        data_dir="data/tinyshakespeare",
+        output_root="runs/test-exec",
+    )
+
+    trial = sf.TrialSpec(
+        trial_id="trial-002",
+        campaign_id="camp-exec-2",
+        hypothesis="override train-only fields",
+        overrides={"learning_rate": 1e-4, "batch_size": 8, "n_layer": 99},
+    )
+
+    train_cfg = executor._build_trial_train_cfg(trial)
+    model_cfg = executor._build_trial_model_cfg()
+
+    assert train_cfg.learning_rate == 1e-4
+    assert train_cfg.batch_size == 8
+    assert model_cfg.n_layer == base_model_cfg.n_layer

@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from pathlib import Path
+import logging
+
+from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
 from .proposals import ExperimentProposal
+from .config import TrainingConfig, ModelConfig
+from .data import build_dataset
+from .core import TrainingRuntime
+from .common import ensure_dir
 
 
 @dataclass
@@ -133,4 +140,73 @@ class CampaignRunner:
             objective_metric=self.config.objective_metric,
             results=self.results,
             maximize=self.config.maximize,
+        )
+class TrialExecutor:
+    def __init__(
+        self,
+        campaign: CampaignConfig,
+        base_train_cfg: TrainingConfig,
+        base_model_cfg: ModelConfig,
+        data_dir: str,
+        output_root: str,
+        logger: Optional[logging.Logger] = None,
+    ):
+        self.campaign = campaign
+        self.base_train_cfg = base_train_cfg
+        self.base_model_cfg = base_model_cfg
+        self.data_dir = data_dir
+        self.output_root = output_root
+        self.logger = logger or logging.getLogger("swarm_forge_trial_executor")
+
+    def _build_trial_train_cfg(self, trial: TrialSpec) -> TrainingConfig:
+        payload = asdict(self.base_train_cfg)
+        for key, value in trial.overrides.items():
+            if key in payload:
+                payload[key] = value
+        return TrainingConfig(**payload)
+
+    def _build_trial_model_cfg(self) -> ModelConfig:
+        return ModelConfig(**asdict(self.base_model_cfg))
+
+    def execute(self, trial: TrialSpec) -> TrialResult:
+        train_cfg = self._build_trial_train_cfg(trial)
+        model_cfg = self._build_trial_model_cfg()
+
+        trial_output_dir = ensure_dir(Path(self.output_root) / self.campaign.campaign_id / trial.trial_id)
+        dataset = build_dataset(self.campaign.dataset_name, self.data_dir, train_cfg, self.logger)
+        model_cfg.vocab_size = dataset.tokenizer.vocab_size
+        model_cfg.block_size = train_cfg.block_size
+
+        runtime = TrainingRuntime(
+            tcfg=train_cfg,
+            mcfg=model_cfg,
+            dataset=dataset,
+            output_dir=trial_output_dir,
+            logger=self.logger,
+        )
+
+        initial_metrics = runtime.evaluate()
+        train_stats = runtime.train_steps(train_cfg.patch_trial_train_steps)
+        final_metrics = runtime.evaluate()
+
+        objective_metric = self.campaign.objective_metric
+        objective_value = float(final_metrics[objective_metric])
+
+        checkpoint_path = runtime.save_checkpoint("trial_final", final_metrics)
+
+        metrics = {
+            "initial": initial_metrics,
+            "train": asdict(train_stats),
+            "final": final_metrics,
+        }
+
+        return TrialResult(
+            trial_id=trial.trial_id,
+            campaign_id=trial.campaign_id,
+            success=True,
+            objective_metric=objective_metric,
+            objective_value=objective_value,
+            metrics=metrics,
+            checkpoint_path=str(checkpoint_path),
+            notes=trial.hypothesis,
         )
