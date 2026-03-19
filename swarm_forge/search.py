@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from .research import TrialSpec
+from .research import CampaignRunner, TrialExecutor, TrialSpec
 from .proposals import ExperimentProposal
 
 
@@ -146,6 +146,21 @@ class SearchSession:
             trials.append(trial)
 
         return trials
+
+    def execute_proposals(
+        self,
+        state_id: str,
+        proposals: list[ExperimentProposal],
+        campaign_runner: CampaignRunner,
+        executor: TrialExecutor,
+        hypothesis_prefix: str = "search expansion",
+    ) -> list:
+        trials = self.expand_proposals_to_trials(
+            state_id=state_id,
+            proposals=proposals,
+            hypothesis_prefix=hypothesis_prefix,
+        )
+        return campaign_runner.run_trials(executor, trials)
 def proposal_to_search_action(proposal: ExperimentProposal) -> SearchAction:
     return SearchAction(
         action_id=proposal.proposal_id,
