@@ -131,6 +131,18 @@ class CampaignRunner:
         for result in results:
             self.add_result(result)
 
+    def run_trial(self, executor: "TrialExecutor", trial: TrialSpec) -> TrialResult:
+        self.add_trial(trial)
+        result = executor.execute(trial)
+        self.add_result(result)
+        return result
+
+    def run_trials(self, executor: "TrialExecutor", trials: List[TrialSpec]) -> List[TrialResult]:
+        out: List[TrialResult] = []
+        for trial in trials:
+            out.append(self.run_trial(executor, trial))
+        return out
+
     def best_result(self) -> Optional[TrialResult]:
         return select_best_trial(self.results, maximize=self.config.maximize)
 

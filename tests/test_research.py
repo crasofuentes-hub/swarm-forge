@@ -344,3 +344,121 @@ def test_trial_executor_applies_training_overrides_only():
     assert train_cfg.learning_rate == 1e-4
     assert train_cfg.batch_size == 8
     assert model_cfg.n_layer == base_model_cfg.n_layer
+def test_campaign_runner_run_trial_executes_and_records_result(tmp_path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "input.txt").write_text(("To be, or not to be.\n" * 300), encoding="utf-8")
+
+    campaign = sf.CampaignConfig(
+        campaign_id="camp-runner-exec-1",
+        dataset_name="tinyshakespeare",
+        objective_metric="val_loss",
+        maximize=False,
+    )
+
+    runner = sf.CampaignRunner(campaign)
+
+    executor = sf.TrialExecutor(
+        campaign=campaign,
+        base_train_cfg=sf.TrainingConfig(
+            device="cpu",
+            batch_size=4,
+            micro_batch_size=4,
+            block_size=32,
+            max_iters_per_cycle=2,
+            eval_iters=2,
+            amp_enabled=False,
+            patch_trial_train_steps=1,
+        ),
+        base_model_cfg=sf.ModelConfig(
+            vocab_size=256,
+            block_size=32,
+            n_layer=2,
+            n_head=2,
+            n_embd=64,
+            dropout=0.1,
+        ),
+        data_dir=str(data_dir),
+        output_root=str(tmp_path / "runs"),
+    )
+
+    trial = sf.TrialSpec(
+        trial_id="trial-runner-001",
+        campaign_id="camp-runner-exec-1",
+        hypothesis="runner executes one trial",
+        overrides={"learning_rate": 5e-5, "patch_trial_train_steps": 1},
+    )
+
+    result = runner.run_trial(executor, trial)
+    summary = runner.summary()
+
+    assert result.trial_id == "trial-runner-001"
+    assert len(runner.trials) == 1
+    assert len(runner.results) == 1
+    assert summary.total_trials == 1
+    assert summary.successful_trials == 1
+    assert summary.best_trial_id == "trial-runner-001"
+
+
+def test_campaign_runner_run_trials_executes_batch(tmp_path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "input.txt").write_text(("To be, or not to be.\n" * 300), encoding="utf-8")
+
+    campaign = sf.CampaignConfig(
+        campaign_id="camp-runner-exec-2",
+        dataset_name="tinyshakespeare",
+        objective_metric="val_loss",
+        maximize=False,
+    )
+
+    runner = sf.CampaignRunner(campaign)
+
+    executor = sf.TrialExecutor(
+        campaign=campaign,
+        base_train_cfg=sf.TrainingConfig(
+            device="cpu",
+            batch_size=4,
+            micro_batch_size=4,
+            block_size=32,
+            max_iters_per_cycle=2,
+            eval_iters=2,
+            amp_enabled=False,
+            patch_trial_train_steps=1,
+        ),
+        base_model_cfg=sf.ModelConfig(
+            vocab_size=256,
+            block_size=32,
+            n_layer=2,
+            n_head=2,
+            n_embd=64,
+            dropout=0.1,
+        ),
+        data_dir=str(data_dir),
+        output_root=str(tmp_path / "runs"),
+    )
+
+    trials = [
+        sf.TrialSpec(
+            trial_id="trial-batch-001",
+            campaign_id="camp-runner-exec-2",
+            hypothesis="trial one",
+            overrides={"learning_rate": 5e-5, "patch_trial_train_steps": 1},
+        ),
+        sf.TrialSpec(
+            trial_id="trial-batch-002",
+            campaign_id="camp-runner-exec-2",
+            hypothesis="trial two",
+            overrides={"learning_rate": 1e-4, "patch_trial_train_steps": 1},
+        ),
+    ]
+
+    results = runner.run_trials(executor, trials)
+    summary = runner.summary()
+
+    assert len(results) == 2
+    assert len(runner.trials) == 2
+    assert len(runner.results) == 2
+    assert summary.total_trials == 2
+    assert summary.successful_trials == 2
+    assert summary.best_trial_id in {"trial-batch-001", "trial-batch-002"}
