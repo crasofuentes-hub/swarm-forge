@@ -86,3 +86,40 @@ def search_transition_to_trial_spec(
         trial_id=next_state.state_id,
         hypothesis=hypothesis,
     )
+class SearchSession:
+    def __init__(self, root_state: SearchState):
+        self.root_state = root_state
+        self.states: Dict[str, SearchState] = {root_state.state_id: root_state}
+        self.actions_by_state: Dict[str, list[SearchAction]] = {}
+
+    def get_state(self, state_id: str) -> SearchState:
+        return self.states[state_id]
+
+    def apply_action(self, state_id: str, action: SearchAction, next_state_id: str) -> SearchState:
+        state = self.get_state(state_id)
+        next_state = apply_action_to_state(state, action, next_state_id=next_state_id)
+        self.states[next_state.state_id] = next_state
+        self.actions_by_state.setdefault(state_id, []).append(action)
+        return next_state
+
+    def state_to_trial_spec(self, state_id: str, trial_id: str, hypothesis: str) -> TrialSpec:
+        state = self.get_state(state_id)
+        return search_state_to_trial_spec(
+            state=state,
+            trial_id=trial_id,
+            hypothesis=hypothesis,
+        )
+
+    def transition_to_trial_spec(
+        self,
+        state_id: str,
+        action: SearchAction,
+        next_state_id: str,
+        hypothesis: str,
+    ) -> TrialSpec:
+        next_state = self.apply_action(state_id, action, next_state_id=next_state_id)
+        return search_state_to_trial_spec(
+            state=next_state,
+            trial_id=next_state.state_id,
+            hypothesis=hypothesis,
+        )

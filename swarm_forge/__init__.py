@@ -11,7 +11,7 @@ from .patches import Patch, PatchVote, PatchDecision, PatchConflictResolver
 from .proposals import AppliedPatchRecord, ExperimentProposal, build_experiment_proposal
 from .patch_applier import PatchApplier
 from .research import CampaignConfig, TrialSpec, TrialResult, CampaignSummary, CampaignRunner, TrialExecutor, score_trial_result, select_best_trial, build_campaign_summary, proposal_to_trial_spec, proposals_to_trial_specs
-from .search import SearchState, SearchAction, apply_action_to_state, search_state_to_trial_spec, search_transition_to_trial_spec
+from .search import SearchState, SearchAction, SearchSession, apply_action_to_state, search_state_to_trial_spec, search_transition_to_trial_spec
 from .agents import (
     AgentState,
     Agent,
@@ -59,6 +59,7 @@ __all__ = [
     "TrialExecutor",
     "SearchState",
     "SearchAction",
+    "SearchSession",
     "apply_action_to_state",
     "search_state_to_trial_spec",
     "search_transition_to_trial_spec",

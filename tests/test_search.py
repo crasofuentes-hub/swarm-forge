@@ -115,3 +115,83 @@ def test_search_transition_to_trial_spec_applies_action_first():
     assert trial.overrides["batch_size"] == 16
     assert "depth:1" in trial.tags
     assert "state:s1" in trial.tags
+def test_search_session_apply_action_registers_new_state():
+    root = sf.SearchState(
+        campaign_id="camp-session-1",
+        state_id="root",
+        dataset_name="tinyshakespeare",
+        objective_metric="val_loss",
+        maximize=False,
+        applied_overrides={"learning_rate": 3e-4},
+        budget_remaining=5,
+        depth=0,
+    )
+
+    session = sf.SearchSession(root)
+
+    action = sf.SearchAction(
+        action_id="a1",
+        action_type="train_override",
+        overrides={"learning_rate": 1e-4, "batch_size": 8},
+        description="refine training setup",
+    )
+
+    next_state = session.apply_action("root", action, next_state_id="s1")
+
+    assert next_state.state_id == "s1"
+    assert next_state.parent_state_id == "root"
+    assert next_state.depth == 1
+    assert session.get_state("s1").applied_overrides["learning_rate"] == 1e-4
+    assert len(session.actions_by_state["root"]) == 1
+
+
+def test_search_session_state_to_trial_spec():
+    root = sf.SearchState(
+        campaign_id="camp-session-2",
+        state_id="root",
+        dataset_name="tinyshakespeare",
+        objective_metric="val_loss",
+        maximize=False,
+        applied_overrides={"learning_rate": 5e-5},
+        budget_remaining=3,
+        depth=0,
+    )
+
+    session = sf.SearchSession(root)
+    trial = session.state_to_trial_spec("root", trial_id="trial-root", hypothesis="run root state")
+
+    assert trial.trial_id == "trial-root"
+    assert trial.campaign_id == "camp-session-2"
+    assert trial.overrides["learning_rate"] == 5e-5
+
+
+def test_search_session_transition_to_trial_spec():
+    root = sf.SearchState(
+        campaign_id="camp-session-3",
+        state_id="root",
+        dataset_name="tinyshakespeare",
+        objective_metric="val_loss",
+        maximize=False,
+        applied_overrides={"learning_rate": 3e-4},
+        budget_remaining=4,
+        depth=0,
+    )
+
+    session = sf.SearchSession(root)
+    action = sf.SearchAction(
+        action_id="a1",
+        action_type="train_override",
+        overrides={"learning_rate": 1e-4},
+        description="lower lr",
+    )
+
+    trial = session.transition_to_trial_spec(
+        state_id="root",
+        action=action,
+        next_state_id="s1",
+        hypothesis="execute next search state",
+    )
+
+    assert trial.trial_id == "s1"
+    assert trial.overrides["learning_rate"] == 1e-4
+    assert session.get_state("s1").depth == 1
