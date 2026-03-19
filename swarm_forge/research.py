@@ -143,8 +143,24 @@ class CampaignRunner:
             out.append(self.run_trial(executor, trial))
         return out
 
+    def rank_results(self) -> List[TrialResult]:
+        successful = [r for r in self.results if r.success]
+        return sorted(
+            successful,
+            key=lambda r: (
+                score_trial_result(r, maximize=self.config.maximize),
+                r.trial_id,
+            ),
+            reverse=True,
+        )
+
     def best_result(self) -> Optional[TrialResult]:
-        return select_best_trial(self.results, maximize=self.config.maximize)
+        ranked = self.rank_results()
+        return ranked[0] if ranked else None
+
+    def best_trial_id(self) -> Optional[str]:
+        best = self.best_result()
+        return best.trial_id if best is not None else None
 
     def summary(self) -> CampaignSummary:
         return build_campaign_summary(

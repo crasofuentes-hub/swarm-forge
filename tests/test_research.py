@@ -462,3 +462,115 @@ def test_campaign_runner_run_trials_executes_batch(tmp_path):
     assert summary.total_trials == 2
     assert summary.successful_trials == 2
     assert summary.best_trial_id in {"trial-batch-001", "trial-batch-002"}
+def test_campaign_runner_rank_results_for_min_objective():
+    runner = sf.CampaignRunner(
+        sf.CampaignConfig(
+            campaign_id="camp-rank-min",
+            dataset_name="wikitext2",
+            objective_metric="val_loss",
+            maximize=False,
+        )
+    )
+
+    runner.add_results([
+        sf.TrialResult(
+            trial_id="t3",
+            campaign_id="camp-rank-min",
+            success=True,
+            objective_metric="val_loss",
+            objective_value=2.80,
+        ),
+        sf.TrialResult(
+            trial_id="t1",
+            campaign_id="camp-rank-min",
+            success=True,
+            objective_metric="val_loss",
+            objective_value=2.40,
+        ),
+        sf.TrialResult(
+            trial_id="t2",
+            campaign_id="camp-rank-min",
+            success=True,
+            objective_metric="val_loss",
+            objective_value=2.60,
+        ),
+    ])
+
+    ranked = runner.rank_results()
+
+    assert [r.trial_id for r in ranked] == ["t1", "t2", "t3"]
+    assert runner.best_trial_id() == "t1"
+
+
+def test_campaign_runner_rank_results_for_max_objective():
+    runner = sf.CampaignRunner(
+        sf.CampaignConfig(
+            campaign_id="camp-rank-max",
+            dataset_name="wikitext2",
+            objective_metric="bleu_like",
+            maximize=True,
+        )
+    )
+
+    runner.add_results([
+        sf.TrialResult(
+            trial_id="t1",
+            campaign_id="camp-rank-max",
+            success=True,
+            objective_metric="bleu_like",
+            objective_value=11.0,
+        ),
+        sf.TrialResult(
+            trial_id="t3",
+            campaign_id="camp-rank-max",
+            success=True,
+            objective_metric="bleu_like",
+            objective_value=15.5,
+        ),
+        sf.TrialResult(
+            trial_id="t2",
+            campaign_id="camp-rank-max",
+            success=True,
+            objective_metric="bleu_like",
+            objective_value=13.0,
+        ),
+    ])
+
+    ranked = runner.rank_results()
+
+    assert [r.trial_id for r in ranked] == ["t3", "t2", "t1"]
+    assert runner.best_trial_id() == "t3"
+
+
+def test_campaign_runner_rank_results_ignores_failed_trials():
+    runner = sf.CampaignRunner(
+        sf.CampaignConfig(
+            campaign_id="camp-rank-fail",
+            dataset_name="wikitext2",
+            objective_metric="val_loss",
+            maximize=False,
+        )
+    )
+
+    runner.add_results([
+        sf.TrialResult(
+            trial_id="t-good",
+            campaign_id="camp-rank-fail",
+            success=True,
+            objective_metric="val_loss",
+            objective_value=2.50,
+        ),
+        sf.TrialResult(
+            trial_id="t-bad-failed",
+            campaign_id="camp-rank-fail",
+            success=False,
+            objective_metric="val_loss",
+            objective_value=2.10,
+        ),
+    ])
+
+    ranked = runner.rank_results()
+
+    assert len(ranked) == 1
+    assert ranked[0].trial_id == "t-good"
+    assert runner.best_trial_id() == "t-good"
