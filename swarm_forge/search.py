@@ -124,6 +124,28 @@ class SearchSession:
             trial_id=next_state.state_id,
             hypothesis=hypothesis,
         )
+
+    def expand_proposals_to_trials(
+        self,
+        state_id: str,
+        proposals: list[ExperimentProposal],
+        hypothesis_prefix: str = "search expansion",
+    ) -> list[TrialSpec]:
+        trials: list[TrialSpec] = []
+        actions = proposals_to_search_actions(proposals)
+
+        for index, (proposal, action) in enumerate(zip(proposals, actions), start=1):
+            next_state_id = f"{state_id}__{action.action_id}"
+            hypothesis = f"{hypothesis_prefix}: {proposal.hypothesis}"
+            trial = self.transition_to_trial_spec(
+                state_id=state_id,
+                action=action,
+                next_state_id=next_state_id,
+                hypothesis=hypothesis,
+            )
+            trials.append(trial)
+
+        return trials
 def proposal_to_search_action(proposal: ExperimentProposal) -> SearchAction:
     return SearchAction(
         action_id=proposal.proposal_id,

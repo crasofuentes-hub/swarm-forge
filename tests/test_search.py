@@ -254,3 +254,94 @@ def test_proposals_to_search_actions_batch():
     assert len(actions) == 2
     assert actions[0].source_proposal_id == "prop-search-001"
     assert actions[1].overrides["label_smoothing"] == 0.02
+def test_search_session_expand_proposals_to_trials():
+    root = sf.SearchState(
+        campaign_id="camp-expand-1",
+        state_id="root",
+        dataset_name="tinyshakespeare",
+        objective_metric="val_loss",
+        maximize=False,
+        applied_overrides={"learning_rate": 3e-4},
+        budget_remaining=5,
+        depth=0,
+    )
+
+    session = sf.SearchSession(root)
+
+    proposals = [
+        sf.ExperimentProposal(
+            proposal_id="prop-a",
+            author_id="HyperparamTuner-00",
+            author_role="HyperparamTuner",
+            timestamp="2026-03-19T00:00:00Z",
+            dataset_name="tinyshakespeare",
+            hypothesis="lower lr",
+            changed_variable="learning_rate",
+            proposed_value=5e-5,
+            success_metric="val_loss",
+            success_threshold=2.5,
+            rollback_condition="val_loss > 2.7",
+        ),
+        sf.ExperimentProposal(
+            proposal_id="prop-b",
+            author_id="LossEngineer-00",
+            author_role="LossEngineer",
+            timestamp="2026-03-19T00:01:00Z",
+            dataset_name="tinyshakespeare",
+            hypothesis="small smoothing",
+            changed_variable="label_smoothing",
+            proposed_value=0.02,
+            success_metric="val_loss",
+            success_threshold=2.5,
+            rollback_condition="val_loss > 2.7",
+        ),
+    ]
+
+    trials = session.expand_proposals_to_trials("root", proposals, hypothesis_prefix="proposal batch")
+
+    assert len(trials) == 2
+    assert trials[0].campaign_id == "camp-expand-1"
+    assert trials[0].trial_id == "root__prop-a"
+    assert trials[1].trial_id == "root__prop-b"
+    assert trials[0].overrides["learning_rate"] == 5e-5
+    assert trials[1].overrides["label_smoothing"] == 0.02
+    assert session.get_state("root__prop-a").depth == 1
+    assert session.get_state("root__prop-b").depth == 1
+    assert len(session.actions_by_state["root"]) == 2
+
+
+def test_search_session_expand_proposals_to_trials_keeps_prior_overrides():
+    root = sf.SearchState(
+        campaign_id="camp-expand-2",
+        state_id="root",
+        dataset_name="tinyshakespeare",
+        objective_metric="val_loss",
+        maximize=False,
+        applied_overrides={"batch_size": 8},
+        budget_remaining=3,
+        depth=0,
+    )
+
+    session = sf.SearchSession(root)
+
+    proposals = [
+        sf.ExperimentProposal(
+            proposal_id="prop-c",
+            author_id="HyperparamTuner-00",
+            author_role="HyperparamTuner",
+            timestamp="2026-03-19T00:02:00Z",
+            dataset_name="tinyshakespeare",
+            hypothesis="set lr",
+            changed_variable="learning_rate",
+            proposed_value=1e-4,
+            success_metric="val_loss",
+            success_threshold=2.5,
+            rollback_condition="val_loss > 2.7",
+        )
+    ]
+
+    trials = session.expand_proposals_to_trials("root", proposals)
+
+    assert len(trials) == 1
+    assert trials[0].overrides["batch_size"] == 8
+    assert trials[0].overrides["learning_rate"] == 1e-4
