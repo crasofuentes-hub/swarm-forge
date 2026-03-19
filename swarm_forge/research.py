@@ -100,3 +100,37 @@ def proposals_to_trial_specs(
     campaign_id: Optional[str] = None,
 ) -> List[TrialSpec]:
     return [proposal_to_trial_spec(p, campaign_id=campaign_id) for p in proposals]
+class CampaignRunner:
+    def __init__(self, config: CampaignConfig):
+        self.config = config
+        self.trials: List[TrialSpec] = []
+        self.results: List[TrialResult] = []
+
+    def add_trial(self, trial: TrialSpec) -> None:
+        if trial.campaign_id != self.config.campaign_id:
+            raise ValueError("Trial campaign_id does not match CampaignRunner config.")
+        self.trials.append(trial)
+
+    def add_trials(self, trials: List[TrialSpec]) -> None:
+        for trial in trials:
+            self.add_trial(trial)
+
+    def add_result(self, result: TrialResult) -> None:
+        if result.campaign_id != self.config.campaign_id:
+            raise ValueError("TrialResult campaign_id does not match CampaignRunner config.")
+        self.results.append(result)
+
+    def add_results(self, results: List[TrialResult]) -> None:
+        for result in results:
+            self.add_result(result)
+
+    def best_result(self) -> Optional[TrialResult]:
+        return select_best_trial(self.results, maximize=self.config.maximize)
+
+    def summary(self) -> CampaignSummary:
+        return build_campaign_summary(
+            campaign_id=self.config.campaign_id,
+            objective_metric=self.config.objective_metric,
+            results=self.results,
+            maximize=self.config.maximize,
+        )

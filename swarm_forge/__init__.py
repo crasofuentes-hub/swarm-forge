@@ -10,7 +10,7 @@ from .engine import ParallelBackend
 from .patches import Patch, PatchVote, PatchDecision, PatchConflictResolver
 from .proposals import AppliedPatchRecord, ExperimentProposal, build_experiment_proposal
 from .patch_applier import PatchApplier
-from .research import CampaignConfig, TrialSpec, TrialResult, CampaignSummary, score_trial_result, select_best_trial, build_campaign_summary, proposal_to_trial_spec, proposals_to_trial_specs
+from .research import CampaignConfig, TrialSpec, TrialResult, CampaignSummary, CampaignRunner, score_trial_result, select_best_trial, build_campaign_summary, proposal_to_trial_spec, proposals_to_trial_specs
 from .agents import (
     AgentState,
     Agent,
@@ -54,6 +54,7 @@ __all__ = [
     "TrialSpec",
     "TrialResult",
     "CampaignSummary",
+    "CampaignRunner",
     "score_trial_result",
     "select_best_trial",
     "build_campaign_summary",

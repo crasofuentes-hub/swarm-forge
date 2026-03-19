@@ -155,3 +155,103 @@ def test_proposals_to_trial_specs_batch():
     assert trials[0].campaign_id == "camp-wiki-a"
     assert trials[1].campaign_id == "camp-wiki-a"
     assert trials[1].overrides["label_smoothing"] == 0.02
+def test_campaign_runner_summary_and_best_result():
+    runner = sf.CampaignRunner(
+        sf.CampaignConfig(
+            campaign_id="camp-wiki-a",
+            dataset_name="wikitext2",
+            objective_metric="val_loss",
+            maximize=False,
+        )
+    )
+
+    runner.add_trial(
+        sf.TrialSpec(
+            trial_id="t1",
+            campaign_id="camp-wiki-a",
+            hypothesis="baseline",
+            overrides={"learning_rate": 3e-4},
+        )
+    )
+    runner.add_trial(
+        sf.TrialSpec(
+            trial_id="t2",
+            campaign_id="camp-wiki-a",
+            hypothesis="smaller lr",
+            overrides={"learning_rate": 5e-5},
+        )
+    )
+
+    runner.add_result(
+        sf.TrialResult(
+            trial_id="t1",
+            campaign_id="camp-wiki-a",
+            success=True,
+            objective_metric="val_loss",
+            objective_value=2.70,
+        )
+    )
+    runner.add_result(
+        sf.TrialResult(
+            trial_id="t2",
+            campaign_id="camp-wiki-a",
+            success=True,
+            objective_metric="val_loss",
+            objective_value=2.56,
+        )
+    )
+
+    best = runner.best_result()
+    summary = runner.summary()
+
+    assert best is not None
+    assert best.trial_id == "t2"
+    assert summary.best_trial_id == "t2"
+    assert summary.best_objective_value == 2.56
+    assert summary.total_trials == 2
+    assert summary.successful_trials == 2
+
+
+def test_campaign_runner_rejects_mismatched_trial_campaign_id():
+    runner = sf.CampaignRunner(
+        sf.CampaignConfig(
+            campaign_id="camp-main",
+            dataset_name="wikitext2",
+        )
+    )
+
+    try:
+        runner.add_trial(
+            sf.TrialSpec(
+                trial_id="t-x",
+                campaign_id="camp-other",
+                hypothesis="bad",
+                overrides={},
+            )
+        )
+        assert False, "Expected ValueError for mismatched campaign_id"
+    except ValueError as exc:
+        assert "campaign_id" in str(exc)
+
+
+def test_campaign_runner_rejects_mismatched_result_campaign_id():
+    runner = sf.CampaignRunner(
+        sf.CampaignConfig(
+            campaign_id="camp-main",
+            dataset_name="wikitext2",
+        )
+    )
+
+    try:
+        runner.add_result(
+            sf.TrialResult(
+                trial_id="r-x",
+                campaign_id="camp-other",
+                success=True,
+                objective_metric="val_loss",
+                objective_value=2.5,
+            )
+        )
+        assert False, "Expected ValueError for mismatched campaign_id"
+    except ValueError as exc:
+        assert "campaign_id" in str(exc)
