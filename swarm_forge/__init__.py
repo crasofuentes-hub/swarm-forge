@@ -5,7 +5,7 @@ from dataclasses import asdict
 
 from .config import TrainingConfig, ModelConfig, SwarmConfig
 from .core import TrainingRuntime, SwarmEngine, build_arg_parser, main, utc_now
-from .data import CharTokenizer, TinyShakespeareData, WikiText2Data, build_dataset
+from .data import CharTokenizer, TinyShakespeareData, WikiText2Data, OpenWebTextData, build_dataset
 from .engine import ParallelBackend
 from .patches import Patch, PatchVote, PatchDecision, PatchConflictResolver
 from .proposals import AppliedPatchRecord, ExperimentProposal, build_experiment_proposal
@@ -39,6 +39,7 @@ __all__ = [
     "CharTokenizer",
     "TinyShakespeareData",
     "WikiText2Data",
+    "OpenWebTextData",
     "build_dataset",
     "TrainingRuntime",
     "ParallelBackend",

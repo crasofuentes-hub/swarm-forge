@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import json
 import logging
 import random
+import numpy as np
 import urllib.request
+import tiktoken
 from typing import Any, Dict, List, Literal, Tuple
 
 try:
@@ -200,18 +205,91 @@ class WikiText2Data:
         return x.to(device), y.to(device)
 
 
+
+class GPT2TokenizerShim:
+    def __init__(self):
+        self.enc = tiktoken.get_encoding("gpt2")
+        self.vocab_size = self.enc.n_vocab
+        self.merges: List[Tuple[str, str]] = []
+
+    def encode(self, text: str) -> List[int]:
+        return self.enc.encode_ordinary(text)
+
+    def decode(self, ids: List[int]) -> str:
+        normalized = [int(i) for i in ids if int(i) >= 0 and int(i) < self.vocab_size]
+        return self.enc.decode(normalized)
+
+    def update_merges(self, merges: List[Tuple[str, str]]) -> None:
+        normalized: List[Tuple[str, str]] = []
+        for item in merges:
+            if not isinstance(item, tuple) or len(item) != 2:
+                raise ValueError("Each merge entry must be a 2-tuple.")
+            left, right = item
+            normalized.append((str(left), str(right)))
+        self.merges = normalized
+
+
+class OpenWebTextData:
+    def __init__(self, data_dir: str, cfg: TrainingConfig, logger: logging.Logger):
+        self.data_dir = ensure_dir(data_dir)
+        self.cfg = cfg
+        self.logger = logger
+
+        self.train_path = self.data_dir / "train.bin"
+        self.val_path = self.data_dir / "val.bin"
+        self.meta_path = self.data_dir / "meta.json"
+
+        if not self.train_path.exists():
+            raise FileNotFoundError(f"Missing OpenWebText train.bin at {self.train_path}")
+        if not self.val_path.exists():
+            raise FileNotFoundError(f"Missing OpenWebText val.bin at {self.val_path}")
+        if not self.meta_path.exists():
+            raise FileNotFoundError(f"Missing OpenWebText meta.json at {self.meta_path}")
+
+        self.meta = json.loads(self.meta_path.read_text(encoding="utf-8"))
+        self.tokenizer = GPT2TokenizerShim()
+
+        self.train_ids = np.memmap(self.train_path, dtype=np.uint16, mode="r")
+        self.val_ids = np.memmap(self.val_path, dtype=np.uint16, mode="r")
+
+        self.text = json.dumps(self.meta, sort_keys=True)
+        self.train_text = self.text
+        self.val_text = self.text
+        self.augmentation_history: List[Dict[str, Any]] = []
+
+    def rebuild_after_tokenizer_update(self) -> None:
+        return None
+
+    def apply_augmentation(self, intensity: float, pattern: str) -> Dict[str, Any]:
+        return {"changed_chars": 0, "pattern": pattern, "skipped": True, "reason": "openwebtext_bin_dataset"}
+
+    def get_batch(self, split: Literal["train", "val"], batch_size: int, block_size: int, device: str) -> Tuple[torch.Tensor, torch.Tensor]:
+        data = self.train_ids if split == "train" else self.val_ids
+        data_len = len(data)
+        if data_len <= block_size + 1:
+            raise ValueError("Dataset is too small for the configured block size.")
+
+        starts = torch.randint(data_len - block_size - 1, (batch_size,))
+        x_list: List[torch.Tensor] = []
+        y_list: List[torch.Tensor] = []
+
+        for i in starts.tolist():
+            x_np = np.array(data[i:i + block_size], dtype=np.int64)
+            y_np = np.array(data[i + 1:i + 1 + block_size], dtype=np.int64)
+            x_list.append(torch.from_numpy(x_np).long())
+            y_list.append(torch.from_numpy(y_np).long())
+
+        x = torch.stack(x_list)
+        y = torch.stack(y_list)
+
+        if device.startswith("cuda"):
+            return x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+        return x.to(device), y.to(device)
 def build_dataset(dataset_name: str, data_dir: str, cfg: TrainingConfig, logger: logging.Logger):
-    name = str(dataset_name).strip().lower()
-    if name == "tinyshakespeare":
+    if dataset_name == "tinyshakespeare":
         return TinyShakespeareData(data_dir, cfg, logger)
-    if name == "wikitext2":
+    if dataset_name == "wikitext2":
         return WikiText2Data(data_dir, cfg, logger)
+    if dataset_name == "openwebtext":
+        return OpenWebTextData(data_dir, cfg, logger)
     raise ValueError(f"Unsupported dataset_name: {dataset_name}")
-
-
-__all__ = [
-    "CharTokenizer",
-    "TinyShakespeareData",
-    "WikiText2Data",
-    "build_dataset",
-]
