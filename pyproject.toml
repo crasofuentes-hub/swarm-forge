@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swarm-forge"
-version = "1.0.0"
+version = "1.0.3"
 description = "Competitive multi-agent patch governance for nanoGPT experimentation, built around correctness, rollback safety, and auditability."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
   { name = "Oscar Fuentes", email = "crasofuentes@gmail.com" }
 ]
@@ -26,7 +26,6 @@ classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
   "Intended Audience :: Science/Research",
-  "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
@@ -35,7 +34,10 @@ classifiers = [
   "Topic :: Software Development :: Testing"
 ]
 dependencies = [
-  "torch>=2.3.0"
+  "torch>=2.3.0",
+  "numpy>=1.24",
+  "tiktoken>=0.7",
+  "datasets>=2.19"
 ]
 
 [project.optional-dependencies]
